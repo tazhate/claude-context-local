@@ -54,8 +54,8 @@ jobs:
 
       - name: Check for known vulnerabilities
         run: |
-          pip install -e .
-          pip-audit --strict --skip-editable
+          pip install .
+          pip-audit --strict
 
       - name: Static security analysis
         run: bandit -r src/ -c pyproject.toml || bandit -r src/ -ll

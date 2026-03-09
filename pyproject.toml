@@ -6,7 +6,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "Denis Tazhate", email = "tazhate@gmail.com" },
+    { name = "Denis Tazhate", email = "hate@tazhate.ru" },
 ]
 keywords = ["mcp", "claude", "code-search", "embeddings", "semantic-search"]
 classifiers = [

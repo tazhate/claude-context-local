@@ -292,25 +292,23 @@ def search_code(query: str, project_path: str, n_results: int = 10, file_filter:
         file_filter: Optional glob-like filter for file paths (e.g. "*.py" or "src/").
     """
     project_path = os.path.expanduser(project_path)
+    pid = project_id(project_path)
+    db_path = DATA_DIR / pid
+    if not db_path.exists():
+        return "Project not indexed yet. Run index_project first."
+
     collection = get_collection(project_path)
 
     if collection.count() == 0:
         return "Project not indexed yet. Run index_project first."
 
-    where_filter = None
-    if file_filter:
-        if file_filter.startswith("*."):
-            ext = file_filter[1:]  # e.g. ".py"
-            # ChromaDB doesn't support glob, use $contains on file path
-            where_filter = {"file": {"$contains": ext}}
-        elif file_filter:
-            where_filter = {"file": {"$contains": file_filter}}
+    # Fetch more results than needed if filtering, then post-filter
+    fetch_n = min(n_results, 20) if not file_filter else min(n_results * 5, 50)
 
     try:
         results = collection.query(
             query_texts=[query],
-            n_results=min(n_results, 20),
-            where=where_filter,
+            n_results=fetch_n,
             include=["documents", "metadatas", "distances"],
         )
     except Exception as e:
@@ -319,12 +317,24 @@ def search_code(query: str, project_path: str, n_results: int = 10, file_filter:
     if not results["documents"] or not results["documents"][0]:
         return "No results found."
 
+    # Post-filter by file path
+    def matches_filter(filepath: str) -> bool:
+        if not file_filter:
+            return True
+        if file_filter.startswith("*."):
+            return filepath.endswith(file_filter[1:])
+        return file_filter in filepath
+
     output = []
     for doc, meta, dist in zip(
         results["documents"][0],
         results["metadatas"][0],
         results["distances"][0],
     ):
+        if not matches_filter(meta["file"]):
+            continue
+        if len(output) >= n_results:
+            break
         similarity = 1 - dist  # cosine distance to similarity
         header = f"### {meta['file']}:{meta['start_line']}-{meta['end_line']} (score: {similarity:.3f})"
         output.append(f"{header}\n```\n{doc}\n```\n")
@@ -340,6 +350,11 @@ def index_status(project_path: str) -> str:
         project_path: Absolute path to the project.
     """
     project_path = os.path.expanduser(project_path)
+    pid = project_id(project_path)
+    db_path = DATA_DIR / pid
+    if not db_path.exists():
+        return f"Project not indexed: {project_path}\nRun index_project to index it."
+
     collection = get_collection(project_path)
     count = collection.count()
 

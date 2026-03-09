@@ -11,36 +11,29 @@ A lightweight alternative to [zilliztech/claude-context](https://github.com/zill
 - **Incremental indexing** — only re-indexes changed files (MD5 hash check)
 - **MCP protocol** over stdio — plug into Claude Code or any MCP client
 
-## Install
+## Quick start
+
+```bash
+claude mcp add claude-context-local -- uvx claude-context-local
+```
+
+That's it. Restart Claude Code and the tools are available.
+
+### Alternative: pip
+
+```bash
+pip install claude-context-local
+claude mcp add claude-context-local -- claude-context-local
+```
+
+### Alternative: from source
 
 ```bash
 git clone https://github.com/tazhate/claude-context-local.git
 cd claude-context-local
-python3 -m venv .venv
-source .venv/bin/activate
 pip install -e .
+claude mcp add claude-context-local -- claude-context-local
 ```
-
-## Add to Claude Code
-
-```bash
-claude mcp add claude-context-local -- /path/to/claude-context-local/.venv/bin/python /path/to/claude-context-local/server.py
-```
-
-Or manually in `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "claude-context-local": {
-      "command": "/path/to/claude-context-local/.venv/bin/python",
-      "args": ["/path/to/claude-context-local/server.py"]
-    }
-  }
-}
-```
-
-Restart Claude Code after adding.
 
 ## MCP Tools
 

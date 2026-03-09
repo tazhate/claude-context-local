@@ -22,6 +22,9 @@ dependencies = [
     "sentence-transformers>=3.0.0",
 ]
 
+[project.scripts]
+claude-context-local = "claude_context_local.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/tazhate/claude-context-local"
 Repository = "https://github.com/tazhate/claude-context-local"

@@ -15,7 +15,6 @@ from claude_context_local.server import (
     SymbolGraph,
     _ast_chunk_file,
     _detect_language,
-    _extract_symbol_name,
     _check_tree_sitter,
 )
 
@@ -348,7 +347,9 @@ class TestBM25Index:
 class TestSymbolGraph:
     def test_who_calls(self, tmp_path):
         sg = SymbolGraph(tmp_path)
-        sg.update_file("main.py", {"main": ["helper", "process"], "process": ["validate"]})
+        sg.update_file(
+            "main.py", {"main": ["helper", "process"], "process": ["validate"]}
+        )
         sg.update_file("utils.py", {"run": ["helper"]})
 
         callers = sg.who_calls("helper")

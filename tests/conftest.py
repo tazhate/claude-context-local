@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -16,8 +15,8 @@ def sample_project(tmp_path):
     # Go file
     (tmp_path / "server.go").write_text(
         'package main\n\nimport "net/http"\n\n'
-        'func healthCheck(w http.ResponseWriter, r *http.Request) {\n'
-        '    w.WriteHeader(http.StatusOK)\n'
+        "func healthCheck(w http.ResponseWriter, r *http.Request) {\n"
+        "    w.WriteHeader(http.StatusOK)\n"
         '    w.Write([]byte("ok"))\n}\n\n'
         'func main() {\n    http.HandleFunc("/health", healthCheck)\n'
         '    http.ListenAndServe(":8080", nil)\n}\n'
@@ -39,11 +38,11 @@ def sample_project(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
     (src / "utils.py").write_text(
-        'import hashlib\n\n'
-        'def compute_hash(data: bytes) -> str:\n'
+        "import hashlib\n\n"
+        "def compute_hash(data: bytes) -> str:\n"
         '    """Compute SHA256 hash of data."""\n'
-        '    return hashlib.sha256(data).hexdigest()\n\n'
-        'def validate_email(email: str) -> bool:\n'
+        "    return hashlib.sha256(data).hexdigest()\n\n"
+        "def validate_email(email: str) -> bool:\n"
         '    """Check if email format is valid."""\n'
         '    return "@" in email and "." in email.split("@")[1]\n'
     )
@@ -78,4 +77,5 @@ def isolated_data_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("CCL_DATA_DIR", str(data_dir))
 
     import claude_context_local.server as srv
+
     monkeypatch.setattr(srv, "DATA_DIR", Path(str(data_dir)))

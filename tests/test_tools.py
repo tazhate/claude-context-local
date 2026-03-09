@@ -153,7 +153,9 @@ class TestSearchDiff:
     def test_not_a_git_repo(self, sample_project):
         result = search_diff(str(sample_project))
         # sample_project has a fake .git dir but isn't a real repo
-        assert "Error" in result or "not a git" in result or "No files changed" in result
+        assert (
+            "Error" in result or "not a git" in result or "No files changed" in result
+        )
 
     def test_nonexistent_path(self):
         result = search_diff("/nonexistent/path")
@@ -166,7 +168,9 @@ class TestFindSymbol:
         index_project(str(sample_project))
         # Go file has healthCheck called from main
         if _check_tree_sitter():
-            result = find_symbol("healthCheck", str(sample_project), direction="callers")
+            result = find_symbol(
+                "healthCheck", str(sample_project), direction="callers"
+            )
             # May or may not find callers depending on AST parsing depth
             assert "callers" in result.lower() or "no callers" in result.lower()
 

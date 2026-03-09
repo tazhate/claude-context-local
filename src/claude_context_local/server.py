@@ -34,41 +34,106 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="tree_sitter")
 MODEL_NAME = os.environ.get("CCL_MODEL", "all-MiniLM-L6-v2")
 CHUNK_MAX_LINES = int(os.environ.get("CCL_CHUNK_LINES", "50"))
 CHUNK_OVERLAP_LINES = int(os.environ.get("CCL_CHUNK_OVERLAP", "10"))
-DATA_DIR = Path(os.environ.get("CCL_DATA_DIR", Path.home() / ".cache" / "claude-context-local"))
-HYBRID_ALPHA = float(os.environ.get("CCL_HYBRID_ALPHA", "0.7"))  # 0=BM25 only, 1=semantic only
-CONTEXT_LINES = int(os.environ.get("CCL_CONTEXT_LINES", "5"))  # surrounding lines in results
+DATA_DIR = Path(
+    os.environ.get("CCL_DATA_DIR", Path.home() / ".cache" / "claude-context-local")
+)
+HYBRID_ALPHA = float(
+    os.environ.get("CCL_HYBRID_ALPHA", "0.7")
+)  # 0=BM25 only, 1=semantic only
+CONTEXT_LINES = int(
+    os.environ.get("CCL_CONTEXT_LINES", "5")
+)  # surrounding lines in results
 
 # File extensions to index
 CODE_EXTENSIONS = {
-    ".py", ".go", ".js", ".ts", ".tsx", ".jsx", ".rs", ".java", ".kt",
-    ".c", ".cpp", ".h", ".hpp", ".cs", ".rb", ".php", ".swift", ".scala",
-    ".sh", ".bash", ".zsh", ".fish",
-    ".yaml", ".yml", ".toml", ".json", ".hcl", ".tf",
-    ".sql", ".graphql", ".proto",
-    ".md", ".txt", ".rst",
-    ".dockerfile", ".containerfile",
-    ".html", ".css", ".scss", ".less",
-    ".lua", ".zig", ".nim", ".ex", ".exs", ".erl",
-    ".nix", ".dhall",
+    ".py",
+    ".go",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".rs",
+    ".java",
+    ".kt",
+    ".c",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cs",
+    ".rb",
+    ".php",
+    ".swift",
+    ".scala",
+    ".sh",
+    ".bash",
+    ".zsh",
+    ".fish",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".json",
+    ".hcl",
+    ".tf",
+    ".sql",
+    ".graphql",
+    ".proto",
+    ".md",
+    ".txt",
+    ".rst",
+    ".dockerfile",
+    ".containerfile",
+    ".html",
+    ".css",
+    ".scss",
+    ".less",
+    ".lua",
+    ".zig",
+    ".nim",
+    ".ex",
+    ".exs",
+    ".erl",
+    ".nix",
+    ".dhall",
 }
 
 # Directories to always skip
 SKIP_DIRS = {
-    ".git", ".hg", ".svn",
-    "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache",
-    ".venv", "venv", "env", ".env",
-    "vendor", "third_party",
-    ".tox", ".eggs", "dist", "build",
-    ".next", ".nuxt", ".output",
+    ".git",
+    ".hg",
+    ".svn",
+    "node_modules",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "vendor",
+    "third_party",
+    ".tox",
+    ".eggs",
+    "dist",
+    "build",
+    ".next",
+    ".nuxt",
+    ".output",
     "target",  # rust/java
     ".terraform",
     ".claude",
 }
 
 SKIP_FILES = {
-    "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
-    "go.sum", "Cargo.lock", "poetry.lock", "uv.lock",
-    "Pipfile.lock", "composer.lock", "Gemfile.lock",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "go.sum",
+    "Cargo.lock",
+    "poetry.lock",
+    "uv.lock",
+    "Pipfile.lock",
+    "composer.lock",
+    "Gemfile.lock",
 }
 
 MAX_FILE_SIZE = 512 * 1024  # 512KB
@@ -83,27 +148,68 @@ mcp = FastMCP("claude-context-local")
 
 # Extension -> tree-sitter language name
 _EXT_TO_LANG: dict[str, str] = {
-    ".py": "python", ".go": "go", ".js": "javascript", ".ts": "typescript",
-    ".tsx": "tsx", ".jsx": "javascript", ".rs": "rust", ".java": "java",
-    ".c": "c", ".cpp": "cpp", ".h": "c", ".hpp": "cpp",
-    ".rb": "ruby", ".php": "php", ".cs": "c_sharp",
-    ".sh": "bash", ".bash": "bash", ".zsh": "bash",
-    ".scala": "scala", ".kt": "kotlin", ".swift": "swift",
-    ".lua": "lua", ".ex": "elixir", ".exs": "elixir",
-    ".zig": "zig", ".hcl": "hcl", ".tf": "hcl",
+    ".py": "python",
+    ".go": "go",
+    ".js": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".jsx": "javascript",
+    ".rs": "rust",
+    ".java": "java",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+    ".rb": "ruby",
+    ".php": "php",
+    ".cs": "c_sharp",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".scala": "scala",
+    ".kt": "kotlin",
+    ".swift": "swift",
+    ".lua": "lua",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".zig": "zig",
+    ".hcl": "hcl",
+    ".tf": "hcl",
 }
 
 # Node types that represent top-level symbols per language
 _SYMBOL_NODES: dict[str, set[str]] = {
     "python": {"function_definition", "class_definition", "decorated_definition"},
     "go": {"function_declaration", "method_declaration", "type_declaration"},
-    "javascript": {"function_declaration", "class_declaration", "lexical_declaration", "export_statement"},
-    "typescript": {"function_declaration", "class_declaration", "lexical_declaration", "export_statement", "interface_declaration", "type_alias_declaration"},
-    "tsx": {"function_declaration", "class_declaration", "lexical_declaration", "export_statement"},
+    "javascript": {
+        "function_declaration",
+        "class_declaration",
+        "lexical_declaration",
+        "export_statement",
+    },
+    "typescript": {
+        "function_declaration",
+        "class_declaration",
+        "lexical_declaration",
+        "export_statement",
+        "interface_declaration",
+        "type_alias_declaration",
+    },
+    "tsx": {
+        "function_declaration",
+        "class_declaration",
+        "lexical_declaration",
+        "export_statement",
+    },
     "rust": {"function_item", "struct_item", "impl_item", "enum_item", "trait_item"},
     "java": {"method_declaration", "class_declaration", "interface_declaration"},
     "c": {"function_definition", "struct_specifier", "declaration"},
-    "cpp": {"function_definition", "class_specifier", "struct_specifier", "namespace_definition"},
+    "cpp": {
+        "function_definition",
+        "class_specifier",
+        "struct_specifier",
+        "namespace_definition",
+    },
     "ruby": {"method", "class", "module"},
     "bash": {"function_definition"},
     "php": {"function_definition", "class_declaration", "method_declaration"},
@@ -118,6 +224,7 @@ def _check_tree_sitter() -> bool:
     if _TREE_SITTER_AVAILABLE is None:
         try:
             from tree_sitter_languages import get_parser  # noqa: F401
+
             _TREE_SITTER_AVAILABLE = True
         except ImportError:
             _TREE_SITTER_AVAILABLE = False
@@ -129,6 +236,7 @@ def _get_parser(lang: str):
     if lang not in _PARSER_CACHE:
         try:
             from tree_sitter_languages import get_parser
+
             _PARSER_CACHE[lang] = get_parser(lang)
         except Exception:
             _PARSER_CACHE[lang] = None
@@ -221,13 +329,15 @@ def _ast_chunk_file(filepath: Path, project_root: str) -> list[dict] | None:
     symbols = []
     for child in root.children:
         if child.type in symbol_nodes:
-            symbols.append({
-                "start_line": child.start_point[0],
-                "end_line": child.end_point[0],
-                "name": _extract_symbol_name(child),
-                "type": _symbol_type_from_node(child.type),
-                "node_type": child.type,
-            })
+            symbols.append(
+                {
+                    "start_line": child.start_point[0],
+                    "end_line": child.end_point[0],
+                    "name": _extract_symbol_name(child),
+                    "type": _symbol_type_from_node(child.type),
+                    "node_type": child.type,
+                }
+            )
 
     if not symbols:
         # No recognized symbols — fall back to line-based
@@ -246,19 +356,21 @@ def _ast_chunk_file(filepath: Path, project_root: str) -> list[dict] | None:
             while pos < end:
                 chunk_end = min(pos + CHUNK_MAX_LINES, end)
                 chunk_text = "\n".join(lines[pos:chunk_end])
-                chunks.append({
-                    "id": f"{rel_path}:{pos}",
-                    "document": chunk_text,
-                    "metadata": {
-                        "file": rel_path,
-                        "start_line": pos + 1,
-                        "end_line": chunk_end,
-                        "total_lines": len(lines),
-                        "language": lang,
-                        "symbol_name": sym["name"],
-                        "symbol_type": sym["type"],
-                    },
-                })
+                chunks.append(
+                    {
+                        "id": f"{rel_path}:{pos}",
+                        "document": chunk_text,
+                        "metadata": {
+                            "file": rel_path,
+                            "start_line": pos + 1,
+                            "end_line": chunk_end,
+                            "total_lines": len(lines),
+                            "language": lang,
+                            "symbol_name": sym["name"],
+                            "symbol_type": sym["type"],
+                        },
+                    }
+                )
                 for ln in range(pos, chunk_end):
                     covered.add(ln)
                 if chunk_end >= end:
@@ -266,19 +378,21 @@ def _ast_chunk_file(filepath: Path, project_root: str) -> list[dict] | None:
                 pos += CHUNK_MAX_LINES - CHUNK_OVERLAP_LINES
         else:
             chunk_text = "\n".join(lines[start:end])
-            chunks.append({
-                "id": f"{rel_path}:{start}",
-                "document": chunk_text,
-                "metadata": {
-                    "file": rel_path,
-                    "start_line": start + 1,
-                    "end_line": end,
-                    "total_lines": len(lines),
-                    "language": lang,
-                    "symbol_name": sym["name"],
-                    "symbol_type": sym["type"],
-                },
-            })
+            chunks.append(
+                {
+                    "id": f"{rel_path}:{start}",
+                    "document": chunk_text,
+                    "metadata": {
+                        "file": rel_path,
+                        "start_line": start + 1,
+                        "end_line": end,
+                        "total_lines": len(lines),
+                        "language": lang,
+                        "symbol_name": sym["name"],
+                        "symbol_type": sym["type"],
+                    },
+                }
+            )
             for ln in range(start, end):
                 covered.add(ln)
 
@@ -301,19 +415,21 @@ def _ast_chunk_file(filepath: Path, project_root: str) -> list[dict] | None:
             continue  # skip trivial gaps (blank lines)
         chunk_text = "\n".join(lines[start:end])
         if chunk_text.strip():
-            chunks.append({
-                "id": f"{rel_path}:{start}",
-                "document": chunk_text,
-                "metadata": {
-                    "file": rel_path,
-                    "start_line": start + 1,
-                    "end_line": end,
-                    "total_lines": len(lines),
-                    "language": lang,
-                    "symbol_name": "",
-                    "symbol_type": "preamble",
-                },
-            })
+            chunks.append(
+                {
+                    "id": f"{rel_path}:{start}",
+                    "document": chunk_text,
+                    "metadata": {
+                        "file": rel_path,
+                        "start_line": start + 1,
+                        "end_line": end,
+                        "total_lines": len(lines),
+                        "language": lang,
+                        "symbol_name": "",
+                        "symbol_type": "preamble",
+                    },
+                }
+            )
 
     # Sort by start line
     chunks.sort(key=lambda c: c["metadata"]["start_line"])
@@ -321,6 +437,7 @@ def _ast_chunk_file(filepath: Path, project_root: str) -> list[dict] | None:
 
 
 # --- Symbol graph (Feature: 7ub) ---
+
 
 def _extract_calls(filepath: Path, lang: str) -> dict[str, list[str]] | None:
     """Extract function call relationships from a file using tree-sitter."""
@@ -350,11 +467,17 @@ def _extract_calls(filepath: Path, lang: str) -> dict[str, list[str]] | None:
                     calls[current_func] = []
 
         if node.type == "call" or node.type == "call_expression":
-            callee = node.child_by_field_name("function") or node.child_by_field_name("name")
+            callee = node.child_by_field_name("function") or node.child_by_field_name(
+                "name"
+            )
             if not callee:
                 # Try first child for simple calls
                 for child in node.children:
-                    if child.type == "identifier" or child.type == "member_expression" or child.type == "selector_expression":
+                    if (
+                        child.type == "identifier"
+                        or child.type == "member_expression"
+                        or child.type == "selector_expression"
+                    ):
                         callee = child
                         break
 
@@ -435,6 +558,7 @@ def get_symbol_graph(proj_path: str) -> SymbolGraph:
 
 # --- Embedding function ---
 
+
 def get_embedding_function():
     """Get the embedding function based on config.
 
@@ -445,7 +569,10 @@ def get_embedding_function():
         return chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
     else:
         try:
-            from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+            from chromadb.utils.embedding_functions import (
+                SentenceTransformerEmbeddingFunction,
+            )
+
             return SentenceTransformerEmbeddingFunction(model_name=MODEL_NAME)
         except ImportError:
             log.warning(
@@ -489,11 +616,15 @@ class BM25Index:
         self._loaded = True
 
     def save(self):
-        self.path.write_text(json.dumps({
-            "docs": self.docs,
-            "df": dict(self.df),
-            "avgdl": self.avgdl,
-        }))
+        self.path.write_text(
+            json.dumps(
+                {
+                    "docs": self.docs,
+                    "df": dict(self.df),
+                    "avgdl": self.avgdl,
+                }
+            )
+        )
 
     def add(self, doc_id: str, text: str):
         self._load()
@@ -558,7 +689,9 @@ class BM25Index:
                 tf = tf_map[qt]
                 df = self.df.get(qt, 0)
                 idf = math.log((n - df + 0.5) / (df + 0.5) + 1.0)
-                tf_norm = (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / max(self.avgdl, 1)))
+                tf_norm = (tf * (k1 + 1)) / (
+                    tf + k1 * (1 - b + b * dl / max(self.avgdl, 1))
+                )
                 score += idf * tf_norm
             if score > 0:
                 scores[doc_id] = score
@@ -569,6 +702,7 @@ class BM25Index:
 
 # --- Gitignore ---
 
+
 def load_gitignore_patterns(project_path: str) -> list[str]:
     """Load .gitignore patterns from project root."""
     gitignore = Path(project_path) / ".gitignore"
@@ -577,7 +711,8 @@ def load_gitignore_patterns(project_path: str) -> list[str]:
     try:
         lines = gitignore.read_text().splitlines()
         return [
-            line.strip() for line in lines
+            line.strip()
+            for line in lines
             if line.strip() and not line.strip().startswith("#")
         ]
     except OSError:
@@ -646,6 +781,7 @@ def _simple_match(pattern: str, text: str) -> bool:
 
 
 # --- Helpers ---
+
 
 def project_id(project_path: str) -> str:
     """Stable ID for a project path."""
@@ -732,19 +868,21 @@ def chunk_file(filepath: Path, project_root: str) -> list[dict]:
     chunks = []
 
     if len(lines) <= CHUNK_MAX_LINES:
-        chunks.append({
-            "id": f"{rel_path}:0",
-            "document": content,
-            "metadata": {
-                "file": rel_path,
-                "start_line": 1,
-                "end_line": len(lines),
-                "total_lines": len(lines),
-                "language": lang,
-                "symbol_name": "",
-                "symbol_type": "",
-            },
-        })
+        chunks.append(
+            {
+                "id": f"{rel_path}:0",
+                "document": content,
+                "metadata": {
+                    "file": rel_path,
+                    "start_line": 1,
+                    "end_line": len(lines),
+                    "total_lines": len(lines),
+                    "language": lang,
+                    "symbol_name": "",
+                    "symbol_type": "",
+                },
+            }
+        )
     else:
         start = 0
         while start < len(lines):
@@ -752,19 +890,21 @@ def chunk_file(filepath: Path, project_root: str) -> list[dict]:
             chunk_lines = lines[start:end]
             chunk_text = "\n".join(chunk_lines)
 
-            chunks.append({
-                "id": f"{rel_path}:{start}",
-                "document": chunk_text,
-                "metadata": {
-                    "file": rel_path,
-                    "start_line": start + 1,
-                    "end_line": end,
-                    "total_lines": len(lines),
-                    "language": lang,
-                    "symbol_name": "",
-                    "symbol_type": "",
-                },
-            })
+            chunks.append(
+                {
+                    "id": f"{rel_path}:{start}",
+                    "document": chunk_text,
+                    "metadata": {
+                        "file": rel_path,
+                        "start_line": start + 1,
+                        "end_line": end,
+                        "total_lines": len(lines),
+                        "language": lang,
+                        "symbol_name": "",
+                        "symbol_type": "",
+                    },
+                }
+            )
 
             if end >= len(lines):
                 break
@@ -791,7 +931,9 @@ def _read_file_lines(filepath: Path) -> list[str] | None:
         return None
 
 
-def _get_context_lines(project_path: str, file_rel: str, start_line: int, end_line: int, context: int) -> str:
+def _get_context_lines(
+    project_path: str, file_rel: str, start_line: int, end_line: int, context: int
+) -> str:
     """Get chunk content with surrounding context lines."""
     if context <= 0:
         return ""
@@ -856,7 +998,9 @@ def _start_watcher(project_path: str):
                     parts = rel.split("/")
                     if any(p in SKIP_DIRS for p in parts[:-1]):
                         continue
-                    if gitignore_patterns and matches_gitignore(rel, gitignore_patterns):
+                    if gitignore_patterns and matches_gitignore(
+                        rel, gitignore_patterns
+                    ):
                         continue
                     changed_files.add(rel)
 
@@ -873,7 +1017,11 @@ def _start_watcher(project_path: str):
             _watchers.pop(project_path, None)
             log.info("Watcher stopped for %s", project_path)
 
-    thread = threading.Thread(target=_watch_thread, daemon=True, name=f"watcher-{project_id(project_path)[:8]}")
+    thread = threading.Thread(
+        target=_watch_thread,
+        daemon=True,
+        name=f"watcher-{project_id(project_path)[:8]}",
+    )
     thread.start()
 
 
@@ -933,12 +1081,16 @@ def _incremental_reindex(project_path: str, changed_files: set[str]):
 
 # --- Git diff helpers (Feature: bx0) ---
 
+
 def _git_changed_files(project_path: str, ref: str = "HEAD") -> list[str] | None:
     """Get list of files changed since a git ref."""
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", ref],
-            capture_output=True, text=True, cwd=project_path, timeout=10,
+            capture_output=True,
+            text=True,
+            cwd=project_path,
+            timeout=10,
         )
         if result.returncode != 0:
             return None
@@ -953,7 +1105,10 @@ def _git_diff_content(project_path: str, ref: str = "HEAD") -> str | None:
     try:
         result = subprocess.run(
             ["git", "diff", ref],
-            capture_output=True, text=True, cwd=project_path, timeout=10,
+            capture_output=True,
+            text=True,
+            cwd=project_path,
+            timeout=10,
         )
         if result.returncode != 0:
             return None
@@ -963,6 +1118,7 @@ def _git_diff_content(project_path: str, ref: str = "HEAD") -> str | None:
 
 
 # --- Multi-project registry (Feature: 0py) ---
+
 
 def _get_project_registry() -> dict[str, str]:
     """Load project registry: {project_path: project_id}."""
@@ -987,6 +1143,7 @@ def _register_project(project_path: str):
 
 
 # --- MCP Tools ---
+
 
 @mcp.tool()
 def index_project(project_path: str, force: bool = False, watch: bool = False) -> str:
@@ -1107,8 +1264,16 @@ def index_project(project_path: str, force: bool = False, watch: bool = False) -
 
     elapsed = time.time() - t0
     total = collection.count()
-    gitignore_info = f"\n.gitignore: {len(gitignore_patterns)} patterns applied" if gitignore_patterns else ""
-    ast_info = f"\nAST-chunked files: {ast_count}" if _check_tree_sitter() else "\nAST chunking: tree-sitter not installed (using line-based)"
+    gitignore_info = (
+        f"\n.gitignore: {len(gitignore_patterns)} patterns applied"
+        if gitignore_patterns
+        else ""
+    )
+    ast_info = (
+        f"\nAST-chunked files: {ast_count}"
+        if _check_tree_sitter()
+        else "\nAST chunking: tree-sitter not installed (using line-based)"
+    )
 
     # Start watcher if requested
     watch_info = ""
@@ -1202,7 +1367,9 @@ def search_code(
             bm25_mapped[doc_id] = score
             if doc_id not in sem_data:
                 try:
-                    r = collection.get(ids=[chunk_id], include=["documents", "metadatas"])
+                    r = collection.get(
+                        ids=[chunk_id], include=["documents", "metadatas"]
+                    )
                     if r["documents"]:
                         sem_data[doc_id] = (r["documents"][0], r["metadatas"][0])
                 except Exception:
@@ -1252,9 +1419,17 @@ def search_code(
         header = f"### {meta['file']}:{meta['start_line']}-{meta['end_line']}{lang_info}{sym_info} (score: {score:.3f})"
 
         # Context-aware results
-        ctx = context_lines if context_lines > 0 else CONTEXT_LINES if os.environ.get("CCL_CONTEXT_LINES") else 0
+        ctx = (
+            context_lines
+            if context_lines > 0
+            else CONTEXT_LINES
+            if os.environ.get("CCL_CONTEXT_LINES")
+            else 0
+        )
         if ctx > 0:
-            context_text = _get_context_lines(project_path, meta["file"], meta["start_line"], meta["end_line"], ctx)
+            context_text = _get_context_lines(
+                project_path, meta["file"], meta["start_line"], meta["end_line"], ctx
+            )
             if context_text:
                 output.append(f"{header}\n```\n{context_text}\n```\n")
                 continue
@@ -1346,11 +1521,16 @@ def search_all(query: str, n_results: int = 10, file_filter: str = "") -> str:
         header = f"### [{proj_name}] {meta['file']}:{meta['start_line']}-{meta['end_line']}{sym_info} (score: {score:.3f})"
         output.append(f"{header}\n```\n{doc}\n```\n")
 
-    return f"Found {len(output)} results across {len(registry)} projects for: {query}\n\n" + "\n".join(output)
+    return (
+        f"Found {len(output)} results across {len(registry)} projects for: {query}\n\n"
+        + "\n".join(output)
+    )
 
 
 @mcp.tool()
-def search_diff(project_path: str, query: str = "", ref: str = "HEAD", n_results: int = 10) -> str:
+def search_diff(
+    project_path: str, query: str = "", ref: str = "HEAD", n_results: int = 10
+) -> str:
     """Search only code that changed since a git ref (commit, branch, tag).
 
     If query is empty, returns all changed chunks. If query is provided,
@@ -1451,7 +1631,9 @@ def search_diff(project_path: str, query: str = "", ref: str = "HEAD", n_results
     if not output:
         return f"No results for '{query}' in changed files since {ref}"
 
-    return f"Found {len(output)} results in changed files since {ref}:\n\n" + "\n".join(output)
+    return f"Found {len(output)} results in changed files since {ref}:\n\n" + "\n".join(
+        output
+    )
 
 
 @mcp.tool()
@@ -1532,8 +1714,16 @@ def index_status(project_path: str) -> str:
         sg._load()
         sg_status = f"Symbol graph: {len(sg.graph)} files"
 
-        lang_info = ", ".join(f"{lang}={cnt}" for lang, cnt in languages.most_common(5)) if languages else "none detected"
-        sym_info = ", ".join(f"{st}={cnt}" for st, cnt in symbol_types.most_common(5)) if symbol_types else "none"
+        lang_info = (
+            ", ".join(f"{lang}={cnt}" for lang, cnt in languages.most_common(5))
+            if languages
+            else "none detected"
+        )
+        sym_info = (
+            ", ".join(f"{st}={cnt}" for st, cnt in symbol_types.most_common(5))
+            if symbol_types
+            else "none"
+        )
 
         watcher_status = "active" if project_path in _watchers else "inactive"
 
@@ -1546,7 +1736,7 @@ def index_status(project_path: str) -> str:
             f"{bm25_status}\n"
             f"{sg_status}\n"
             f"Model: {MODEL_NAME}\n"
-            f"Hybrid alpha: {HYBRID_ALPHA} (semantic={HYBRID_ALPHA}, bm25={1-HYBRID_ALPHA})\n"
+            f"Hybrid alpha: {HYBRID_ALPHA} (semantic={HYBRID_ALPHA}, bm25={1 - HYBRID_ALPHA})\n"
             f"File watcher: {watcher_status}"
         )
     except Exception as e:

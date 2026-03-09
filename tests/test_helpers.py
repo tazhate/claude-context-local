@@ -4,12 +4,14 @@ from pathlib import Path
 
 from claude_context_local.server import (
     chunk_file,
+    load_gitignore_patterns,
+    matches_gitignore,
     project_id,
     should_index,
     walk_project,
     file_hash,
-    SKIP_DIRS,
-    SKIP_FILES,
+    tokenize,
+    BM25Index,
 )
 
 
@@ -99,6 +101,44 @@ class TestWalkProject:
         names = {f.name for f in files}
         assert "empty.py" not in names
 
+    def test_respects_gitignore(self, sample_project):
+        # Create .gitignore
+        (sample_project / ".gitignore").write_text("*.go\nsrc/\n")
+        patterns = load_gitignore_patterns(str(sample_project))
+        files = list(walk_project(str(sample_project), patterns))
+        names = {f.name for f in files}
+        assert "server.go" not in names
+        assert "utils.py" not in names
+        assert "main.py" in names
+
+
+class TestGitignore:
+    def test_load_patterns(self, sample_project):
+        (sample_project / ".gitignore").write_text("*.pyc\n# comment\n\nbuild/\n")
+        patterns = load_gitignore_patterns(str(sample_project))
+        assert patterns == ["*.pyc", "build/"]
+
+    def test_no_gitignore(self, empty_project):
+        patterns = load_gitignore_patterns(str(empty_project))
+        assert patterns == []
+
+    def test_extension_match(self):
+        assert matches_gitignore("main.pyc", ["*.pyc"])
+        assert not matches_gitignore("main.py", ["*.pyc"])
+
+    def test_directory_match(self):
+        assert matches_gitignore("build/output.js", ["build/"])
+        assert not matches_gitignore("build.py", ["build/"])
+
+    def test_exact_name_match(self):
+        assert matches_gitignore("src/foo.log", ["*.log"])
+
+    def test_path_pattern(self):
+        assert matches_gitignore("src/generated/api.py", ["src/generated"])
+
+    def test_doublestar(self):
+        assert matches_gitignore("deep/nested/test.pyc", ["**/*.pyc"])
+
 
 class TestChunkFile:
     def test_small_file_single_chunk(self, sample_project):
@@ -116,7 +156,6 @@ class TestChunkFile:
         assert "total_lines" in meta
 
     def test_large_file_multiple_chunks(self, sample_project):
-        # Create a file with more than 50 lines
         big = sample_project / "big.py"
         big.write_text("\n".join(f"line_{i} = {i}" for i in range(120)))
         chunks = chunk_file(big, str(sample_project))
@@ -125,7 +164,7 @@ class TestChunkFile:
         # Check overlap
         first_end = chunks[0]["metadata"]["end_line"]
         second_start = chunks[1]["metadata"]["start_line"]
-        assert second_start < first_end  # overlap exists
+        assert second_start < first_end
 
     def test_nonexistent_file(self, sample_project):
         chunks = chunk_file(sample_project / "nope.py", str(sample_project))
@@ -144,7 +183,7 @@ class TestFileHash:
         h1 = file_hash(sample_project / "main.py")
         h2 = file_hash(sample_project / "main.py")
         assert h1 == h2
-        assert len(h1) == 32  # md5 hex
+        assert len(h1) == 32
 
     def test_different_files_different_hash(self, sample_project):
         h1 = file_hash(sample_project / "main.py")
@@ -153,3 +192,72 @@ class TestFileHash:
 
     def test_nonexistent_file(self, sample_project):
         assert file_hash(sample_project / "nope.py") == ""
+
+
+class TestTokenize:
+    def test_basic(self):
+        tokens = tokenize("def hello_world(): pass")
+        assert "def" in tokens
+        assert "hello_world" in tokens
+        assert "pass" in tokens
+
+    def test_numbers(self):
+        tokens = tokenize("x = 42 + y")
+        assert "42" in tokens
+        assert "x" in tokens
+
+    def test_camelcase(self):
+        tokens = tokenize("getUserById")
+        assert "getuserbyid" in tokens
+
+    def test_empty(self):
+        assert tokenize("") == []
+        assert tokenize("   ") == []
+
+
+class TestBM25Index:
+    def test_add_and_search(self, tmp_path):
+        bm25 = BM25Index(tmp_path)
+        bm25.add("doc1", "def hello_world(): print('hello')")
+        bm25.add("doc2", "class UserAuth: def login(): pass")
+        bm25.add("doc3", "def compute_hash(data): return sha256(data)")
+
+        results = bm25.search("hello world")
+        assert "doc1" in results
+        assert results["doc1"] > results.get("doc2", 0)
+
+    def test_remove(self, tmp_path):
+        bm25 = BM25Index(tmp_path)
+        bm25.add("doc1", "hello world")
+        bm25.remove("doc1")
+        results = bm25.search("hello")
+        assert len(results) == 0
+
+    def test_remove_by_prefix(self, tmp_path):
+        bm25 = BM25Index(tmp_path)
+        bm25.add("file.py:0", "first chunk")
+        bm25.add("file.py:50", "second chunk")
+        bm25.add("other.py:0", "other file")
+        bm25.remove_by_prefix("file.py:")
+        assert len(bm25.docs) == 1
+
+    def test_persistence(self, tmp_path):
+        bm25 = BM25Index(tmp_path)
+        bm25.add("doc1", "persistent data")
+        bm25.save()
+
+        bm25_2 = BM25Index(tmp_path)
+        results = bm25_2.search("persistent")
+        assert "doc1" in results
+
+    def test_clear(self, tmp_path):
+        bm25 = BM25Index(tmp_path)
+        bm25.add("doc1", "data")
+        bm25.save()
+        bm25.clear()
+        assert len(bm25.docs) == 0
+
+    def test_empty_search(self, tmp_path):
+        bm25 = BM25Index(tmp_path)
+        results = bm25.search("anything")
+        assert results == {}

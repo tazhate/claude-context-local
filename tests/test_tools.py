@@ -19,7 +19,7 @@ class TestIndexProject:
     def test_incremental_index(self, sample_project):
         index_project(str(sample_project))
         result = index_project(str(sample_project))
-        assert "0 files" not in result or "unchanged" in result
+        assert "unchanged" in result
 
     def test_force_reindex(self, sample_project):
         index_project(str(sample_project))
@@ -32,11 +32,17 @@ class TestIndexProject:
 
     def test_incremental_detects_changes(self, sample_project):
         index_project(str(sample_project))
-
-        # Modify a file
         (sample_project / "main.py").write_text("def changed(): pass\n")
         result = index_project(str(sample_project))
-        assert "1 files" in result or "Indexed 1" in result
+        # At least 1 file re-indexed, and some unchanged
+        assert "unchanged" in result
+        assert "Indexed 0 files" not in result
+
+    def test_gitignore_respected(self, sample_project):
+        (sample_project / ".gitignore").write_text("*.go\n")
+        result = index_project(str(sample_project), force=True)
+        assert "Indexed 4 files" in result  # 5 minus server.go
+        assert ".gitignore: 1 patterns" in result
 
 
 class TestSearchCode:
@@ -58,7 +64,6 @@ class TestSearchCode:
     def test_search_with_file_filter(self):
         result = search_code("function", str(self.project), file_filter="*.py")
         assert "Found" in result
-        # Should not return .go files
         assert "server.go" not in result
 
     def test_search_with_path_filter(self):
@@ -80,6 +85,12 @@ class TestSearchCode:
         result = search_code("code", str(self.project), n_results=2)
         assert result.count("###") <= 2
 
+    def test_keyword_search_works(self):
+        """BM25 should boost exact keyword matches."""
+        result = search_code("compute_hash", str(self.project))
+        assert "Found" in result
+        assert "utils.py" in result
+
 
 class TestIndexStatus:
     def test_not_indexed(self, empty_project):
@@ -91,7 +102,8 @@ class TestIndexStatus:
         result = index_status(str(sample_project))
         assert "Indexed files: 5" in result
         assert "Total chunks:" in result
-        assert "all-MiniLM-L6-v2" in result
+        assert "BM25 documents:" in result
+        assert "Hybrid alpha:" in result
 
 
 class TestDropIndex:
@@ -100,7 +112,6 @@ class TestDropIndex:
         result = drop_index(str(sample_project))
         assert "removed" in result
 
-        # Verify it's gone
         status = index_status(str(sample_project))
         assert "not indexed" in status
 

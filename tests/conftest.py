@@ -1,5 +1,4 @@
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -78,6 +77,5 @@ def isolated_data_dir(tmp_path, monkeypatch):
     data_dir.mkdir()
     monkeypatch.setenv("CCL_DATA_DIR", str(data_dir))
 
-    # Re-import to pick up new env var
     import claude_context_local.server as srv
     monkeypatch.setattr(srv, "DATA_DIR", Path(str(data_dir)))

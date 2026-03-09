@@ -12,6 +12,11 @@ from claude_context_local.server import (
     file_hash,
     tokenize,
     BM25Index,
+    SymbolGraph,
+    _ast_chunk_file,
+    _detect_language,
+    _extract_symbol_name,
+    _check_tree_sitter,
 )
 
 
@@ -102,7 +107,6 @@ class TestWalkProject:
         assert "empty.py" not in names
 
     def test_respects_gitignore(self, sample_project):
-        # Create .gitignore
         (sample_project / ".gitignore").write_text("*.go\nsrc/\n")
         patterns = load_gitignore_patterns(str(sample_project))
         files = list(walk_project(str(sample_project), patterns))
@@ -143,7 +147,7 @@ class TestGitignore:
 class TestChunkFile:
     def test_small_file_single_chunk(self, sample_project):
         chunks = chunk_file(sample_project / "main.py", str(sample_project))
-        assert len(chunks) == 1
+        assert len(chunks) >= 1
         assert chunks[0]["metadata"]["file"] == "main.py"
         assert chunks[0]["metadata"]["start_line"] == 1
 
@@ -155,16 +159,37 @@ class TestChunkFile:
         assert "end_line" in meta
         assert "total_lines" in meta
 
+    def test_chunk_has_language_metadata(self, sample_project):
+        """v0.3.0: chunks should include language metadata."""
+        chunks = chunk_file(sample_project / "main.py", str(sample_project))
+        meta = chunks[0]["metadata"]
+        assert meta.get("language") == "python"
+
+    def test_ast_chunks_have_symbol_info(self, sample_project):
+        """v0.3.0: AST-aware chunks should have symbol name and type."""
+        if not _check_tree_sitter():
+            return
+        chunks = chunk_file(sample_project / "main.py", str(sample_project))
+        symbol_chunks = [c for c in chunks if c["metadata"].get("symbol_name")]
+        assert len(symbol_chunks) >= 1
+        names = {c["metadata"]["symbol_name"] for c in symbol_chunks}
+        assert "hello_world" in names or "add_numbers" in names
+
+    def test_go_ast_chunks(self, sample_project):
+        """v0.3.0: Go files should be AST-chunked too."""
+        if not _check_tree_sitter():
+            return
+        chunks = chunk_file(sample_project / "server.go", str(sample_project))
+        symbol_chunks = [c for c in chunks if c["metadata"].get("symbol_name")]
+        assert len(symbol_chunks) >= 1
+        names = {c["metadata"]["symbol_name"] for c in symbol_chunks}
+        assert "healthCheck" in names or "main" in names
+
     def test_large_file_multiple_chunks(self, sample_project):
         big = sample_project / "big.py"
         big.write_text("\n".join(f"line_{i} = {i}" for i in range(120)))
         chunks = chunk_file(big, str(sample_project))
         assert len(chunks) > 1
-
-        # Check overlap
-        first_end = chunks[0]["metadata"]["end_line"]
-        second_start = chunks[1]["metadata"]["start_line"]
-        assert second_start < first_end
 
     def test_nonexistent_file(self, sample_project):
         chunks = chunk_file(sample_project / "nope.py", str(sample_project))
@@ -176,6 +201,63 @@ class TestChunkFile:
         chunks = chunk_file(big, str(sample_project))
         ids = [c["id"] for c in chunks]
         assert len(ids) == len(set(ids))
+
+    def test_yaml_fallback_to_line_based(self, sample_project):
+        """YAML files should fall back to line-based chunking."""
+        chunks = chunk_file(sample_project / "config.yaml", str(sample_project))
+        assert len(chunks) >= 1
+        # YAML shouldn't have AST symbol info
+        assert chunks[0]["metadata"].get("symbol_name", "") == ""
+
+
+class TestDetectLanguage:
+    def test_python(self):
+        assert _detect_language(Path("foo.py")) == "python"
+
+    def test_go(self):
+        assert _detect_language(Path("foo.go")) == "go"
+
+    def test_javascript(self):
+        assert _detect_language(Path("foo.js")) == "javascript"
+
+    def test_typescript(self):
+        assert _detect_language(Path("foo.ts")) == "typescript"
+
+    def test_rust(self):
+        assert _detect_language(Path("foo.rs")) == "rust"
+
+    def test_unknown(self):
+        assert _detect_language(Path("foo.yaml")) is None
+        assert _detect_language(Path("foo.md")) is None
+
+
+class TestASTChunking:
+    def test_python_functions(self, sample_project):
+        if not _check_tree_sitter():
+            return
+        chunks = _ast_chunk_file(sample_project / "main.py", str(sample_project))
+        assert chunks is not None
+        symbol_chunks = [c for c in chunks if c["metadata"]["symbol_name"]]
+        names = {c["metadata"]["symbol_name"] for c in symbol_chunks}
+        assert "hello_world" in names
+        assert "add_numbers" in names
+
+    def test_go_functions(self, sample_project):
+        if not _check_tree_sitter():
+            return
+        chunks = _ast_chunk_file(sample_project / "server.go", str(sample_project))
+        assert chunks is not None
+        symbol_chunks = [c for c in chunks if c["metadata"]["symbol_name"]]
+        names = {c["metadata"]["symbol_name"] for c in symbol_chunks}
+        assert "healthCheck" in names
+
+    def test_unsupported_file_returns_none(self, sample_project):
+        result = _ast_chunk_file(sample_project / "config.yaml", str(sample_project))
+        assert result is None
+
+    def test_nonexistent_file(self, sample_project):
+        result = _ast_chunk_file(sample_project / "nope.py", str(sample_project))
+        assert result is None
 
 
 class TestFileHash:
@@ -261,3 +343,44 @@ class TestBM25Index:
         bm25 = BM25Index(tmp_path)
         results = bm25.search("anything")
         assert results == {}
+
+
+class TestSymbolGraph:
+    def test_who_calls(self, tmp_path):
+        sg = SymbolGraph(tmp_path)
+        sg.update_file("main.py", {"main": ["helper", "process"], "process": ["validate"]})
+        sg.update_file("utils.py", {"run": ["helper"]})
+
+        callers = sg.who_calls("helper")
+        assert ("main.py", "main") in callers
+        assert ("utils.py", "run") in callers
+
+    def test_what_calls(self, tmp_path):
+        sg = SymbolGraph(tmp_path)
+        sg.update_file("main.py", {"main": ["helper", "process"]})
+
+        callees = sg.what_calls("main")
+        assert "helper" in callees
+        assert "process" in callees
+
+    def test_persistence(self, tmp_path):
+        sg = SymbolGraph(tmp_path)
+        sg.update_file("main.py", {"main": ["helper"]})
+        sg.save()
+
+        sg2 = SymbolGraph(tmp_path)
+        callers = sg2.who_calls("helper")
+        assert ("main.py", "main") in callers
+
+    def test_remove_file(self, tmp_path):
+        sg = SymbolGraph(tmp_path)
+        sg.update_file("main.py", {"main": ["helper"]})
+        sg.remove_file("main.py")
+        assert sg.who_calls("helper") == []
+
+    def test_clear(self, tmp_path):
+        sg = SymbolGraph(tmp_path)
+        sg.update_file("main.py", {"main": ["helper"]})
+        sg.save()
+        sg.clear()
+        assert sg.graph == {}

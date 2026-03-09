@@ -915,7 +915,7 @@ def chunk_file(filepath: Path, project_root: str) -> list[dict]:
 
 def file_hash(filepath: Path) -> str:
     """Fast hash of file content for change detection."""
-    h = hashlib.md5()
+    h = hashlib.md5(usedforsecurity=False)  # noqa: S324
     try:
         h.update(filepath.read_bytes())
     except OSError:

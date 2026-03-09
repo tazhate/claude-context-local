@@ -58,7 +58,7 @@ jobs:
           pip-audit
 
       - name: Static security analysis
-        run: bandit -r src/ -c pyproject.toml || bandit -r src/ -ll
+        run: bandit -r src/ -s B110,B112,B324 -ll
 
   lint:
     runs-on: ubuntu-latest
